@@ -102,7 +102,7 @@ User asks how Solr field types map to OpenSearch types.
 ### Schema Conversion
 
 ```python
-from solr_to_opensearch import SolrToOpenSearchMigrationSkill
+import SolrToOpenSearchMigrationSkill
 
 skill = SolrToOpenSearchMigrationSkill()
 
