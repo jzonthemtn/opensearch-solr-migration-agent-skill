@@ -99,13 +99,22 @@ User asks how Solr field types map to OpenSearch types.
 
 ## Instructions
 
+### Usage
+
+```python
+import sys
+import os
+# Add scripts directory to sys.path
+sys.path.append(os.path.join(os.getcwd(), "scripts"))
+
+from skill import SolrToOpenSearchMigrationSkill
+
+skill = SolrToOpenSearchMigrationSkill()
+```
+
 ### Schema Conversion
 
 ```python
-import SolrToOpenSearchMigrationSkill
-
-skill = SolrToOpenSearchMigrationSkill()
-
 # From schema.xml
 with open("schema.xml") as f:
     mapping_json = skill.convert_schema_xml(f.read())

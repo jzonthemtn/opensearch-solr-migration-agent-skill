@@ -13,7 +13,7 @@ import json
 from typing import Any
 
 from schema_converter import SchemaConverter
-from .query_converter import QueryConverter
+from query_converter import QueryConverter
 
 
 class SolrToOpenSearchMigrationSkill:
@@ -130,7 +130,7 @@ class SolrToOpenSearchMigrationSkill:
         Returns:
             A Markdown-formatted reference table as a string.
         """
-        from solr_to_opensearch.schema_converter import SOLR_TYPE_TO_OPENSEARCH
+        from schema_converter import SOLR_TYPE_TO_OPENSEARCH
 
         lines: list[str] = [
             "| Solr Field Type | OpenSearch Type |",

@@ -8,21 +8,26 @@ from Apache Solr to OpenSearch. Compatible with the
 
 | Skill | Directory | Description |
 |---|---|---|
-| Solr to OpenSearch Migration | [`solr-to-opensearch/`](.junie/skills/solr-to-opensearch/) | Converts Solr schemas and queries to OpenSearch equivalents and provides migration guidance |
+| Solr to OpenSearch Migration | [`.junie/skills/solr-to-opensearch/`](.junie/skills/solr-to-opensearch/) | Converts Solr schemas and queries to OpenSearch equivalents and provides migration guidance |
 
 Each skill directory contains:
 - `SKILL.md` — Machine-readable skill definition (agentskills.io format)
 - `README.md` — Human-readable documentation and examples
-- `src/` — Python source package
-- `tests/` — Unit tests
+- `scripts/` — Python source scripts
+- `tests/` — Unit tests (if available)
 
 ## Getting Started
 
 ```bash
-cd solr-to-opensearch
+cd .junie/skills/solr-to-opensearch
 pip install -e ".[dev]"
 python - <<'EOF'
-from solr_to_opensearch import SolrToOpenSearchMigrationSkill
+import sys
+import os
+# Add scripts directory to sys.path
+sys.path.append(os.path.join(os.getcwd(), "scripts"))
+
+from skill import SolrToOpenSearchMigrationSkill
 
 skill = SolrToOpenSearchMigrationSkill()
 print(skill.convert_query("title:opensearch AND price:[10 TO 100]"))

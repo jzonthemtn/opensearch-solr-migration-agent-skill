@@ -54,7 +54,12 @@ pip install -e ".[dev]"
 ## Usage
 
 ```python
-from solr_to_opensearch import SolrToOpenSearchMigrationSkill
+import sys
+import os
+# Add scripts directory to sys.path
+sys.path.append(os.path.join(os.getcwd(), "scripts"))
+
+from skill import SolrToOpenSearchMigrationSkill
 
 skill = SolrToOpenSearchMigrationSkill()
 
@@ -167,16 +172,12 @@ solr-to-opensearch/
 ├── pyproject.toml
 ├── requirements-dev.txt
 ├── README.md
-├── src/
-│   └── solr_to_opensearch/
-│       ├── __init__.py
-│       ├── skill.py             # High-level SolrToOpenSearchMigrationSkill class
-│       ├── schema_converter.py  # Solr schema → OpenSearch mapping converter
-│       └── query_converter.py   # Solr query syntax → OpenSearch Query DSL converter
-└── tests/
-    ├── test_skill.py
-    ├── test_schema_converter.py
-    └── test_query_converter.py
+├── SKILL.md
+└── scripts/
+    ├── __init__.py
+    ├── skill.py             # High-level SolrToOpenSearchMigrationSkill class
+    ├── schema_converter.py  # Solr schema → OpenSearch mapping converter
+    └── query_converter.py   # Solr query syntax → OpenSearch Query DSL converter
 ```
 
 ## License
