@@ -12,8 +12,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from solr_to_opensearch.schema_converter import SchemaConverter
-from solr_to_opensearch.query_converter import QueryConverter
+from schema_converter import SchemaConverter
+from .query_converter import QueryConverter
 
 
 class SolrToOpenSearchMigrationSkill:

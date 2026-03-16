@@ -21,3 +21,5 @@ env/
 # Coverage reports
 .coverage
 htmlcov/
+
+.idea/

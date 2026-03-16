@@ -8,7 +8,7 @@ from Apache Solr to OpenSearch. Compatible with the
 
 | Skill | Directory | Description |
 |---|---|---|
-| Solr to OpenSearch Migration | [`solr-to-opensearch/`](solr-to-opensearch/) | Converts Solr schemas and queries to OpenSearch equivalents and provides migration guidance |
+| Solr to OpenSearch Migration | [`solr-to-opensearch/`](.junie/skills/solr-to-opensearch/) | Converts Solr schemas and queries to OpenSearch equivalents and provides migration guidance |
 
 Each skill directory contains:
 - `SKILL.md` — Machine-readable skill definition (agentskills.io format)
