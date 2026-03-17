@@ -4,6 +4,13 @@ An **Agent Skill** for [OpenSearch](https://opensearch.org/) that helps migrate
 from Apache Solr to OpenSearch. Compatible with the
 [agentskills.io](https://agentskills.io) format.
 
+## Good example prompts
+
+* "Help me migrate from Solr to OpenSearch."
+* "Convert this Solr schema to OpenSearch mapping: <schema>...</schema>"
+* "Translate this Solr query to OpenSearch: title:opensearch AND price:[10 TO 100]"
+* "Create a migration report for my Solr setup."
+
 ## Skills
 
 | Skill | Directory | Description |

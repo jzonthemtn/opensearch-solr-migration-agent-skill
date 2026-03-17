@@ -10,10 +10,13 @@ invoke.
 from __future__ import annotations
 
 import json
-from typing import Any
+import os
+from typing import Any, Dict, Optional, List
 
 from schema_converter import SchemaConverter
 from query_converter import QueryConverter
+from storage import StorageInterface, FileStorage
+from report import MigrationReport
 
 
 class SolrToOpenSearchMigrationSkill:
@@ -29,21 +32,131 @@ class SolrToOpenSearchMigrationSkill:
       OpenSearch Query DSL JSON string.
     * :meth:`get_migration_checklist` — Return a human-readable checklist of
       migration steps from Solr to OpenSearch.
+    * :meth:`generate_report` — Generate a comprehensive migration report.
+    * :meth:`handle_message` — Transport-agnostic message handler for the advisor.
 
     Usage::
 
         skill = SolrToOpenSearchMigrationSkill()
-
-        mapping_json = skill.convert_schema_xml(open("schema.xml").read())
-        query_dsl_json = skill.convert_query("title:opensearch AND category:docs")
-
-        print(mapping_json)
-        print(query_dsl_json)
+        response = skill.handle_message("Convert this schema...", session_id="user-123")
     """
 
-    def __init__(self) -> None:
+    def __init__(self, storage: Optional[StorageInterface] = None) -> None:
         self._schema_converter = SchemaConverter()
         self._query_converter = QueryConverter()
+        self._storage = storage or FileStorage()
+        self._steering_docs = self._load_steering_docs()
+
+    def _load_steering_docs(self) -> Dict[str, str]:
+        """Load steering documents from the data directory."""
+        docs = {}
+        data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "steering")
+        if os.path.exists(data_dir):
+            for filename in os.listdir(data_dir):
+                if filename.endswith(".md"):
+                    with open(os.path.join(data_dir, filename), "r") as f:
+                        docs[filename[:-3]] = f.read()
+        return docs
+
+    def handle_message(self, message: str, session_id: str) -> str:
+        """Transport-agnostic core interface.
+        
+        Args:
+            message: The user's message.
+            session_id: The session handle for persistent memory.
+            
+        Returns:
+            A string response from the agent.
+        """
+        # Load or initialize session state
+        session_data = self._storage.load(session_id) or {
+            "history": [],
+            "facts": {},
+            "progress": 0
+        }
+        
+        # Simple rule-based routing for this implementation
+        message_lc = message.lower()
+        response = ""
+
+        # Schema conversion: detect XML schema block in the message
+        schema_start = message.find("<schema")
+        schema_end = message.find("</schema>")
+        has_schema_xml = schema_start != -1 and schema_end != -1
+
+        if "report" in message_lc:
+            response = self.generate_report(session_id)
+        elif has_schema_xml or (
+            ("schema" in message_lc or "migrate" in message_lc or "convert" in message_lc)
+            and "<schema" in message
+        ):
+            if has_schema_xml:
+                schema_xml = message[schema_start:schema_end + 9]
+                mapping = self.convert_schema_xml(schema_xml)
+                response = f"I've converted your Solr schema to an OpenSearch mapping:\n\n```json\n{mapping}\n```"
+                session_data["facts"]["schema_migrated"] = True
+            else:
+                response = "I detected you want to convert a schema, but I couldn't find the XML content. Please paste your full `schema.xml` content."
+        elif "query" in message_lc or "translate" in message_lc:
+            # Extract the query string: look for content after a colon or the keyword
+            q = ""
+            for keyword in ("query:", "query", "translate:"):
+                idx = message_lc.find(keyword)
+                if idx != -1:
+                    q = message[idx + len(keyword):].strip().lstrip(": ").strip()
+                    break
+            if q:
+                try:
+                    dsl = self.convert_query(q)
+                    response = f"The OpenSearch equivalent of your query is:\n\n```json\n{dsl}\n```"
+                except ValueError:
+                    response = "I couldn't parse that query. Please provide a valid Solr query string (e.g. `title:opensearch AND year:[2020 TO *]`)."
+            else:
+                response = "What query would you like me to translate?"
+        elif "checklist" in message_lc:
+            response = self.get_migration_checklist()
+        elif "field type" in message_lc or "type mapping" in message_lc:
+            response = self.get_field_type_mapping_reference()
+        else:
+            response = "I'm your Solr to OpenSearch migration advisor. How can I help you today? I can convert schemas, translate queries, or generate a migration report."
+
+        # Update session memory
+        session_data["history"].append({"user": message, "assistant": response})
+        self._storage.save(session_id, session_data)
+        
+        return response
+
+    def generate_report(self, session_id: str) -> str:
+        """Generate a concrete migration report for the session."""
+        session_data = self._storage.load(session_id) or {}
+        facts = session_data.get("facts", {})
+        
+        milestones = [
+            "Infrastructure setup and sizing",
+            "Schema and analysis chain migration",
+            "Data re-indexing and validation",
+            "Application query and client migration",
+            "Parallel testing and cutover"
+        ]
+        
+        blockers = []
+        if not facts.get("schema_migrated"):
+            blockers.append("Schema not yet analyzed for incompatibilities.")
+        
+        ip = [
+            "Map Solr field types to OpenSearch equivalents (see steering documents).",
+            "Replace Solr copyField with OpenSearch copy_to.",
+            "Update client libraries from SolrJ/SolrPy to OpenSearch clients."
+        ]
+        
+        costs = {
+            "Infrastructure": "Estimated 10% increase over Solr due to shard management overhead.",
+            "Effort": "Moderate (2-4 weeks for typical mid-sized workload)."
+        }
+        
+        report = MigrationReport(milestones, blockers, ip, costs)
+        return report.generate()
+
 
     # ------------------------------------------------------------------
     # Schema conversion
@@ -146,11 +259,6 @@ class SolrToOpenSearchMigrationSkill:
                 lines.append(f"| {short} | {os_type} |")
 
         return "\n".join(lines)
-
-
-# ---------------------------------------------------------------------------
-# Static content
-# ---------------------------------------------------------------------------
 
 _MIGRATION_CHECKLIST: str = """\
 Apache Solr → OpenSearch Migration Checklist

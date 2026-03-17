@@ -1,0 +1,1 @@
+{"history": [{"user": "Translate this query: title:opensearch", "assistant": "The OpenSearch equivalent of your query is:\n\n```json\n{\n  \"query\": {\n    \"match\": {\n      \"title\": \"opensearch\"\n    }\n  }\n}\n```"}], "facts": {}, "progress": 0}
