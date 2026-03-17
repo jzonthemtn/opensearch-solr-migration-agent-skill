@@ -148,18 +148,44 @@ Use the sizing steering document to provide OpenSearch cluster sizing recommenda
 
 ### Step 6 — Client & Front-end Integration
 
-Ask the user what client-side code talks to Solr today:
+Ask the user what client-side code talks to Solr today. Use these prompts:
 
 - *"What client libraries are you using — SolrJ, pysolr, a custom HTTP client, or something else?"*
 - *"Do you have a front-end search UI (e.g. Solr-specific widgets, Velocity templates, or a custom React/Vue app)?"*
+- *"Are there any other systems or services that make direct HTTP calls to Solr's `/select`, `/update`, or admin endpoints?"*
 
-Identify which client calls need to change (endpoint URLs, request/response shapes, authentication) and provide concrete before/after examples where possible.
+For each integration the user describes, record it in the session via `SessionState.add_client_integration` with:
+
+| Field | What to capture |
+|---|---|
+| `name` | The library, framework, or component name (e.g. "SolrJ", "pysolr", "React Search UI") |
+| `kind` | One of: `library`, `ui`, `http`, `other` |
+| `notes` | How it is currently used (endpoints called, features relied on) |
+| `migration_action` | The concrete change required for OpenSearch |
+
+Use the table below to guide the migration action for common integrations:
+
+| Solr client / UI | Kind | Migration action |
+|---|---|---|
+| SolrJ | library | Replace with [opensearch-java](https://github.com/opensearch-project/opensearch-java); update endpoint URLs and request/response models. |
+| pysolr | library | Replace with [opensearch-py](https://github.com/opensearch-project/opensearch-py); update query construction and response parsing. |
+| solr-ruby / rsolr | library | Replace with [opensearch-ruby](https://github.com/opensearch-project/opensearch-ruby). |
+| Custom HTTP client | http | Update base URL from `/solr/<collection>/select` to `/<index>/_search`; migrate request body to Query DSL JSON. |
+| Solr Admin UI | ui | Migrate to [OpenSearch Dashboards](https://opensearch.org/docs/latest/dashboards/); index management, query dev tools, and monitoring are all available. |
+| Velocity / Solr response writer templates | ui | Remove; OpenSearch returns JSON natively — render in the application layer. |
+| React/Vue/Angular with Solr-specific widgets | ui | Replace Solr-specific components with OpenSearch-compatible equivalents or generic REST-based components. |
+| Solr SolrJ CloudSolrClient (SolrCloud) | library | Replace with OpenSearch client pointed at the cluster load balancer; no ZooKeeper dependency. |
+
+If the user describes an integration not in the table, reason about the endpoint and request/response shape changes needed and provide a concrete before/after example.
+
+Identify any authentication changes required (e.g. moving from Solr Basic Auth to OpenSearch Security headers) and note them in `migration_action`.
 
 ### Step 7 — Migration Report
 
 Call `generate_report` to produce the final report. The report must cover:
 
-- **Incompatibilities** (prominent, dedicated section at the top of the report) — every item collected in `facts.incompatibilities` across all steps, grouped by severity: Breaking → Behavioral → Unsupported. Each entry must include the category, a description, and the recommended resolution. If there are Breaking or Unsupported items, call them out explicitly as blockers that must be resolved before cutover.
+- **Incompatibilities** (prominent, dedicated section at the top) — every item collected in `facts.incompatibilities` across all steps, grouped by severity: Breaking → Unsupported → Behavioral. Each entry must include the category, description, and recommended resolution. Breaking and Unsupported items are also surfaced as explicit blockers.
+- **Client & Front-end Impact** — every `ClientIntegration` recorded in Step 6, grouped by kind (libraries, UI, HTTP clients). Each entry shows the current usage and the concrete migration action required. If no integrations were recorded, state that explicitly.
 - Major milestones and suggested sequencing.
 - Blockers surfaced in Steps 2–6.
 - Implementation points with enough detail for an engineer to act on.
@@ -169,12 +195,34 @@ Present the report to the user and offer to drill into any section.
 
 ## Instructions
 
-- Always maintain the session context using the `session_id`.
+- Always maintain the session context using the `session_id`. Every call loads the full `SessionState` (history, facts, progress, incompatibilities) and saves it back before returning — sessions are fully resumable across restarts.
 - Follow the steps in order. If the user jumps ahead, acknowledge their input, store it in the session, and guide them back to complete any skipped steps.
 - If a user asks for migration advice but hasn't provided technical details, proactively request the Solr schema or a sample JSON document (Step 1).
 - Use the steering documents (Query Translation, Index Design, Sizing, Incompatibilities) to inform all reasoning.
-- **Incompatibility tracking is mandatory.** Every incompatibility found in any step must be recorded in `facts.incompatibilities` before moving on. Never silently skip a known issue.
+- **Incompatibility tracking is mandatory.** Every incompatibility found in any step must be recorded in `facts.incompatibilities` (via `SessionState.add_incompatibility`) before moving on. Never silently skip a known issue.
 - When in doubt about whether something is an incompatibility, flag it conservatively — a false positive is far less harmful than a missed breaking change.
+
+### Session State Fields
+
+The `SessionState` object persisted for each session contains:
+
+| Field | Type | Purpose |
+|---|---|---|
+| `session_id` | `str` | Unique session identifier |
+| `history` | `list[{user, assistant}]` | Full conversation turns |
+| `facts` | `dict` | Discovered migration facts (e.g. `schema_migrated`, `customizations`) |
+| `progress` | `int` | Current workflow step (0 = not started; advances forward only) |
+| `incompatibilities` | `list[Incompatibility]` | All incompatibilities found, with `category`, `severity`, `description`, `recommendation` |
+| `client_integrations` | `list[ClientIntegration]` | Client-side and front-end integrations collected in Step 6, with `name`, `kind`, `notes`, `migration_action` |
+
+### Pluggable Storage Backends
+
+The storage backend is injected at construction time. Built-in options:
+
+- `InMemoryStorage` — ephemeral, process-scoped; useful for tests and single-turn use.
+- `FileStorage(base_path)` — JSON file per session on disk; the default for persistent deployments.
+
+Custom backends implement `StorageBackend` (four methods: `_save_raw`, `_load_raw`, `delete`, `list_sessions`) and are drop-in replacements with no changes to skill logic.
 
 ### Usage
 

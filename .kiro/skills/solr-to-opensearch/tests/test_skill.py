@@ -3,25 +3,10 @@ import sys
 import os
 import json
 import pytest
-from unittest.mock import MagicMock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 from skill import SolrToOpenSearchMigrationSkill
-from storage import StorageInterface
-
-
-class InMemoryStorage(StorageInterface):
-    def __init__(self):
-        self._store = {}
-
-    def save(self, session_id, data):
-        self._store[session_id] = data
-
-    def load(self, session_id):
-        return self._store.get(session_id)
-
-    def list_sessions(self):
-        return list(self._store.keys())
+from storage import InMemoryStorage, SessionState, Incompatibility
 
 
 @pytest.fixture
@@ -36,7 +21,9 @@ SIMPLE_SCHEMA_XML = """<schema name="test" version="1.6">
 </schema>"""
 
 
-# --- convert_schema_xml ---
+# ---------------------------------------------------------------------------
+# convert_schema_xml
+# ---------------------------------------------------------------------------
 
 def test_convert_schema_xml_returns_json(skill):
     result = skill.convert_schema_xml(SIMPLE_SCHEMA_XML)
@@ -50,7 +37,9 @@ def test_convert_schema_xml_invalid_raises(skill):
         skill.convert_schema_xml("not xml")
 
 
-# --- convert_schema_json ---
+# ---------------------------------------------------------------------------
+# convert_schema_json
+# ---------------------------------------------------------------------------
 
 def test_convert_schema_json_returns_json(skill):
     schema_json = json.dumps({
@@ -69,16 +58,16 @@ def test_convert_schema_json_invalid_raises(skill):
         skill.convert_schema_json("{bad}")
 
 
-# --- convert_query ---
+# ---------------------------------------------------------------------------
+# convert_query
+# ---------------------------------------------------------------------------
 
 def test_convert_query_match_all(skill):
-    result = skill.convert_query("*:*")
-    assert json.loads(result) == {"query": {"match_all": {}}}
+    assert json.loads(skill.convert_query("*:*")) == {"query": {"match_all": {}}}
 
 
 def test_convert_query_field_value(skill):
-    result = skill.convert_query("title:opensearch")
-    parsed = json.loads(result)
+    parsed = json.loads(skill.convert_query("title:opensearch"))
     assert parsed["query"]["match"]["title"] == "opensearch"
 
 
@@ -87,7 +76,9 @@ def test_convert_query_empty_raises(skill):
         skill.convert_query("")
 
 
-# --- get_migration_checklist ---
+# ---------------------------------------------------------------------------
+# get_migration_checklist
+# ---------------------------------------------------------------------------
 
 def test_get_migration_checklist_contains_sections(skill):
     checklist = skill.get_migration_checklist()
@@ -97,7 +88,9 @@ def test_get_migration_checklist_contains_sections(skill):
     assert "CUTOVER" in checklist
 
 
-# --- get_field_type_mapping_reference ---
+# ---------------------------------------------------------------------------
+# get_field_type_mapping_reference
+# ---------------------------------------------------------------------------
 
 def test_get_field_type_mapping_reference_is_markdown_table(skill):
     ref = skill.get_field_type_mapping_reference()
@@ -106,11 +99,12 @@ def test_get_field_type_mapping_reference_is_markdown_table(skill):
     assert "keyword" in ref
 
 
-# --- handle_message ---
+# ---------------------------------------------------------------------------
+# handle_message — routing
+# ---------------------------------------------------------------------------
 
 def test_handle_message_schema_conversion(skill):
-    msg = f"Please convert this schema: {SIMPLE_SCHEMA_XML}"
-    response = skill.handle_message(msg, "s1")
+    response = skill.handle_message(f"Please convert this schema: {SIMPLE_SCHEMA_XML}", "s1")
     assert "mappings" in response or "OpenSearch" in response
 
 
@@ -134,15 +128,41 @@ def test_handle_message_unknown_returns_greeting(skill):
     assert len(response) > 0
 
 
-def test_handle_message_persists_session(skill):
+# ---------------------------------------------------------------------------
+# handle_message — session state persistence
+# ---------------------------------------------------------------------------
+
+def test_handle_message_persists_history(skill):
     skill.handle_message("hello", "persist-test")
-    storage = skill._storage
-    session = storage.load("persist-test")
-    assert session is not None
-    assert len(session["history"]) == 1
+    state = skill._storage.load("persist-test")
+    assert state is not None
+    assert len(state.history) == 1
+    assert state.history[0]["user"] == "hello"
 
 
-# --- generate_report ---
+def test_handle_message_schema_sets_fact_and_progress(skill):
+    skill.handle_message(f"convert: {SIMPLE_SCHEMA_XML}", "schema-session")
+    state = skill._storage.load("schema-session")
+    assert state.get_fact("schema_migrated") is True
+    assert state.progress >= 1
+
+
+def test_handle_message_query_advances_progress(skill):
+    skill.handle_message("translate query: title:test", "q-session")
+    state = skill._storage.load("q-session")
+    assert state.progress >= 3
+
+
+def test_session_resumes_across_calls(skill):
+    skill.handle_message("hello", "resume-test")
+    skill.handle_message("world", "resume-test")
+    state = skill._storage.load("resume-test")
+    assert len(state.history) == 2
+
+
+# ---------------------------------------------------------------------------
+# generate_report
+# ---------------------------------------------------------------------------
 
 def test_generate_report_no_session(skill):
     report = skill.generate_report("empty-session")
@@ -154,11 +174,71 @@ def test_generate_report_flags_missing_schema(skill):
     assert "Schema not yet analyzed" in report
 
 
-def test_generate_report_after_schema_migration(skill):
-    skill.handle_message(f"convert: {SIMPLE_SCHEMA_XML}", "schema-session")
-    # Manually mark schema as migrated
-    data = skill._storage.load("schema-session") or {}
-    data.setdefault("facts", {})["schema_migrated"] = True
-    skill._storage.save("schema-session", data)
-    report = skill.generate_report("schema-session")
+def test_generate_report_no_missing_schema_blocker_when_migrated(skill):
+    state = skill._storage.load_or_new("migrated-session")
+    state.set_fact("schema_migrated", True)
+    skill._storage.save(state)
+    report = skill.generate_report("migrated-session")
     assert "Schema not yet analyzed" not in report
+
+
+def test_generate_report_includes_incompatibilities(skill):
+    state = skill._storage.load_or_new("inc-session")
+    state.add_incompatibility("schema", "Breaking", "copyField unsupported", "Use copy_to")
+    state.add_incompatibility("query", "Behavioral", "TF-IDF vs BM25", "Configure similarity")
+    skill._storage.save(state)
+    report = skill.generate_report("inc-session")
+    assert "Breaking" in report
+    assert "copyField unsupported" in report
+    assert "Behavioral" in report
+    assert "TF-IDF vs BM25" in report
+
+
+def test_generate_report_breaking_incompatibility_appears_as_blocker(skill):
+    state = skill._storage.load_or_new("blocker-session")
+    state.add_incompatibility("plugin", "Breaking", "Custom plugin X has no equivalent", "Rewrite")
+    skill._storage.save(state)
+    report = skill.generate_report("blocker-session")
+    # Breaking items should appear in both the Incompatibilities section and Blockers
+    assert "Custom plugin X has no equivalent" in report
+    assert "Potential Blockers" in report
+
+
+def test_generate_report_includes_customizations(skill):
+    state = skill._storage.load_or_new("custom-session")
+    state.set_fact("customizations", {"Custom SearchHandler": "Use Search API"})
+    skill._storage.save(state)
+    report = skill.generate_report("custom-session")
+    assert "Custom SearchHandler" in report
+    assert "Use Search API" in report
+
+
+def test_generate_report_no_incompatibilities_message(skill):
+    report = skill.generate_report("clean-session")
+    assert "No incompatibilities identified." in report
+
+
+# ---------------------------------------------------------------------------
+# generate_report — client integrations
+# ---------------------------------------------------------------------------
+
+def test_generate_report_no_client_integrations_message(skill):
+    report = skill.generate_report("no-clients-session")
+    assert "No client or front-end integrations recorded." in report
+
+
+def test_generate_report_includes_client_integrations(skill):
+    state = skill._storage.load_or_new("client-session")
+    state.add_client_integration("SolrJ", "library", "Java client", "Replace with opensearch-java")
+    state.add_client_integration("React UI", "ui", "Solr widgets", "Rewrite with OpenSearch JS")
+    skill._storage.save(state)
+    report = skill.generate_report("client-session")
+    assert "SolrJ" in report
+    assert "Replace with opensearch-java" in report
+    assert "React UI" in report
+    assert "Rewrite with OpenSearch JS" in report
+
+
+def test_generate_report_client_section_present(skill):
+    report = skill.generate_report("section-check")
+    assert "## Client & Front-end Impact" in report
