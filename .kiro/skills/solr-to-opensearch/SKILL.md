@@ -76,7 +76,39 @@ Ask the user for representative Solr queries — at minimum one of each type the
 - Note any behavioral differences (e.g. relevance scoring, minimum-should-match semantics, boost handling).
 - Flag queries that cannot be automatically translated and explain what manual work is needed.
 
-### Step 4 — Cluster & Infrastructure Assessment
+### Step 4 — Solr Customizations
+
+Ask the user whether they rely on any Solr-specific customizations. Use this prompt:
+
+*"Before we look at infrastructure, I'd like to understand any Solr customizations you're using. Do any of the following apply to your deployment? Please describe what you have for each that's relevant:"*
+
+- **Request handlers** — custom `SearchHandler`, `UpdateRequestHandler`, or other handlers defined in `solrconfig.xml`.
+- **Plugins** — custom `QParserPlugin`, `SearchComponent`, `TokenFilterFactory`, `UpdateRequestProcessorChain`, or other plugin types.
+- **Authentication & authorization** — Basic Auth, Kerberos, PKI, Rule-Based Authorization Plugin, or a custom security plugin.
+- **Operational constraints** — specific SLA requirements, air-gapped environments, compliance requirements (e.g. FIPS, FedRAMP), multi-tenancy needs, or read/write traffic isolation.
+
+For each item the user provides, give a concrete OpenSearch equivalent or migration path:
+
+| Solr customization | OpenSearch equivalent / approach |
+|---|---|
+| Custom `SearchHandler` | Use the [Search API](https://opensearch.org/docs/latest/api-reference/search/) with a custom request body; complex handler logic moves to the application layer or an ingest pipeline. |
+| `UpdateRequestProcessorChain` | Replace with an [Ingest Pipeline](https://opensearch.org/docs/latest/ingest-pipelines/) using built-in or custom processors. |
+| Custom `QParserPlugin` | Implement equivalent logic in Query DSL (e.g. `function_score`, `script_score`, `percolate`) or a search pipeline. |
+| Custom `TokenFilterFactory` / `CharFilterFactory` | Re-express as a custom [analyzer definition](https://opensearch.org/docs/latest/analyzers/) in the index settings using the equivalent built-in filter, or implement a custom plugin via the OpenSearch plugin SDK. |
+| Basic Auth | Use the [OpenSearch Security plugin](https://opensearch.org/docs/latest/security/) (bundled) with internal user database or LDAP/Active Directory backend. |
+| Kerberos | OpenSearch Security supports Kerberos via the `kerberos` authentication domain. |
+| PKI / mutual TLS | Configure node-to-node and client TLS in `opensearch.yml`; the Security plugin handles certificate-based auth. |
+| Rule-Based Authorization Plugin | Map to OpenSearch Security [roles and role mappings](https://opensearch.org/docs/latest/security/access-control/). |
+| Air-gapped / offline deployment | OpenSearch supports fully offline installation; use the tarball or RPM/DEB packages and mirror the plugin registry internally. |
+| FIPS 140-2 compliance | OpenSearch provides a [FIPS-compliant distribution](https://opensearch.org/docs/latest/install-and-configure/install-opensearch/fips/). |
+| Multi-tenancy | Use OpenSearch Security [tenants](https://opensearch.org/docs/latest/security/multi-tenancy/) for Dashboards isolation, and index-level permissions for data isolation. |
+| Read/write traffic isolation | Route via separate [coordinating-only nodes](https://opensearch.org/docs/latest/tuning-your-cluster/cluster-formation/cluster-manager/) or use a load balancer with separate pools. |
+
+If the user mentions a customization not in the table above, reason about the closest OpenSearch equivalent and flag it as a manual migration item.
+
+Store all identified customizations and their OpenSearch mappings in the session under `facts.customizations` so they are included in the migration report.
+
+### Step 5 — Cluster & Infrastructure Assessment
 
 Ask the user about their current deployment topology:
 
@@ -86,7 +118,7 @@ Ask the user about their current deployment topology:
 
 Use the sizing steering document to provide OpenSearch cluster sizing recommendations (node count, instance types, shard strategy).
 
-### Step 5 — Client & Front-end Integration
+### Step 6 — Client & Front-end Integration
 
 Ask the user what client-side code talks to Solr today:
 
@@ -95,12 +127,12 @@ Ask the user what client-side code talks to Solr today:
 
 Identify which client calls need to change (endpoint URLs, request/response shapes, authentication) and provide concrete before/after examples where possible.
 
-### Step 6 — Migration Report
+### Step 7 — Migration Report
 
 Call `generate_report` to produce the final report. The report must cover:
 
 - Major milestones and suggested sequencing.
-- Blockers surfaced in Steps 2–5.
+- Blockers surfaced in Steps 2–6.
 - Implementation points with enough detail for an engineer to act on.
 - Cost estimates for infrastructure, effort, and any required tooling changes.
 

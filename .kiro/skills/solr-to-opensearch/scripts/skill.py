@@ -130,7 +130,7 @@ class SolrToOpenSearchMigrationSkill:
         """Generate a concrete migration report for the session."""
         session_data = self._storage.load(session_id) or {}
         facts = session_data.get("facts", {})
-        
+
         milestones = [
             "Infrastructure setup and sizing",
             "Schema and analysis chain migration",
@@ -138,22 +138,27 @@ class SolrToOpenSearchMigrationSkill:
             "Application query and client migration",
             "Parallel testing and cutover"
         ]
-        
+
         blockers = []
         if not facts.get("schema_migrated"):
             blockers.append("Schema not yet analyzed for incompatibilities.")
-        
+
         ip = [
             "Map Solr field types to OpenSearch equivalents (see steering documents).",
             "Replace Solr copyField with OpenSearch copy_to.",
             "Update client libraries from SolrJ/SolrPy to OpenSearch clients."
         ]
-        
+
+        # Include customization migration items if collected in Step 4.
+        customizations = facts.get("customizations", {})
+        for solr_item, os_solution in customizations.items():
+            ip.append(f"Customization — {solr_item}: {os_solution}")
+
         costs = {
             "Infrastructure": "Estimated 10% increase over Solr due to shard management overhead.",
             "Effort": "Moderate (2-4 weeks for typical mid-sized workload)."
         }
-        
+
         report = MigrationReport(milestones, blockers, ip, costs)
         return report.generate()
 
