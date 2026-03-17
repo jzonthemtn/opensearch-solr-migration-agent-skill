@@ -1,4 +1,4 @@
-# opensearch-solr-migration-agent-skill
+# Solr to OpenSearch Migration Agent Skill
 
 An **Agent Skill** for [OpenSearch](https://opensearch.org/) that helps migrate
 from Apache Solr to OpenSearch. Compatible with the
