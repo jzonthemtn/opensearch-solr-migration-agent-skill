@@ -23,6 +23,23 @@ Each skill directory contains:
 - `scripts/` — Python source scripts
 - `tests/` — Unit tests (if available)
 
+## Example Solr IMDB queries
+
+q=primaryTitle:Inception
+q=primaryTitle:Batman AND genres:Action
+q=titleType:tvSeries
+q=*:*&fq=startYear:[2010 TO 2020]
+q=genres:Sci-Fi&sort=startYear desc
+
+## Example Solr Cluster Config
+
+1. SolrCloud with 3 nodes, 2 shards, 2 replicas per shard
+2. 40 million documents
+3. 50 QPS
+4. Indexing rate is 5,000 to 10,000 docs/second
+5. Running on AWS m6.ilarge EC2 instances
+6. Heap is 8 GB
+
 ## Getting Started
 
 ```bash
