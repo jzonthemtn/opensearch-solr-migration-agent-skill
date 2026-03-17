@@ -25,11 +25,20 @@ Each skill directory contains:
 
 ## Example Solr IMDB queries
 
-q=primaryTitle:Inception
-q=primaryTitle:Batman AND genres:Action
-q=titleType:tvSeries
-q=*:*&fq=startYear:[2010 TO 2020]
-q=genres:Sci-Fi&sort=startYear desc
+* q=primaryTitle:Inception
+* q=primaryTitle:Batman AND genres:Action
+* q=titleType:tvSeries
+* q=*:*&fq=startYear:[2010 TO 2020]
+* q=genres:Sci-Fi&sort=startYear desc
+
+```
+defType=edismax
+&q=Christopher Nolan Sci-Fi
+&qf=primaryTitle^10 originalTitle^5 directors^2 genres^1
+&pf=primaryTitle^20
+&tie=0.1
+&bq=averageRating:[8 TO 10]^5
+```
 
 ## Example Solr Cluster Config
 
