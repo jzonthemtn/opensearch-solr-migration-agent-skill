@@ -59,22 +59,50 @@ Move to Step 2.
 
 ### Step 2 — Schema Review & Incompatibility Analysis
 
-Review the converted or generated mapping for known Solr-to-OpenSearch incompatibilities:
+This step is the primary incompatibility gate. Treat every finding as a potential blocker and be thorough — missed incompatibilities discovered late in a migration are expensive to fix.
 
-- Flag any `copyField` directives and explain how to replace them with `copy_to` in OpenSearch.
-- Identify custom analyzers, tokenizers, or char filters that need to be re-expressed in OpenSearch analysis settings.
-- Note any dynamic fields and show the equivalent `dynamic_templates` configuration.
-- Highlight fields where the type mapping is ambiguous or lossy (e.g. `text_general` with custom filters).
+Systematically check the converted mapping against every category in the **Incompatibility Reference** section below. For each issue found:
 
-Present findings as a short list of action items the user needs to resolve.
+1. Classify it as one of: **Breaking** (will cause data loss or index failure), **Behavioral** (works but produces different results), or **Unsupported** (feature has no OpenSearch equivalent).
+2. Record it in the session under `facts.incompatibilities` as a list of objects with keys `category`, `severity`, `description`, and `recommendation`.
+3. Present it to the user immediately with a clear explanation and the recommended resolution.
+
+Specific checks to perform on the schema:
+
+- **copyField** — flag every `<copyField>` directive; explain replacement with `copy_to` on the source field definition.
+- **Field type gaps** — flag `solr.ICUCollationField`, `solr.EnumField`, `solr.ExternalFileField`, `solr.PreAnalyzedField`, and `solr.SortableTextField` as unsupported or requiring manual workarounds.
+- **Custom analyzers** — identify any `<analyzer>`, `<tokenizer>`, or `<filter>` referencing a non-standard class. Check whether an equivalent exists in OpenSearch's built-in analysis chain; flag those that do not.
+- **Dynamic fields** — note that OpenSearch `dynamic_templates` match on field name patterns or data types, not Solr's glob syntax; verify the converted templates preserve the intended behavior.
+- **Stored vs. source** — Solr stores fields individually; OpenSearch stores the original `_source` document. Fields marked `stored="true"` but `indexed="false"` in Solr may behave differently under `_source` filtering.
+- **DocValues** — Solr requires explicit `docValues="true"` for sorting/faceting on most field types; in OpenSearch, `doc_values` is enabled by default for most types. Flag any field where the Solr schema explicitly disables docValues, as the OpenSearch default may change behavior.
+- **Nested / child documents** — Solr block join (`{!parent}`, `{!child}`) has no direct equivalent; flag and recommend OpenSearch [nested objects](https://opensearch.org/docs/latest/field-types/supported-field-types/nested/) or [join field type](https://opensearch.org/docs/latest/field-types/supported-field-types/join/).
+- **Trie field types** — `TrieIntField`, `TrieLongField`, etc. are deprecated in Solr 7+ and have no equivalent in OpenSearch; confirm the user is migrating to the Point field equivalents.
+
+Present all findings as a prioritized list: Breaking first, then Behavioral, then Unsupported. If no incompatibilities are found, state that explicitly so the user has confidence to proceed.
 
 ### Step 3 — Query Translation
 
 Ask the user for representative Solr queries — at minimum one of each type they use in production (standard, dismax/edismax, facet, range, spatial if applicable). For each query:
 
 - Call `convert_query` and show the OpenSearch Query DSL equivalent.
-- Note any behavioral differences (e.g. relevance scoring, minimum-should-match semantics, boost handling).
+- Actively check for query-level incompatibilities and behavioral differences. For each one found, record it in `facts.incompatibilities` with `category: "query"` before moving on.
 - Flag queries that cannot be automatically translated and explain what manual work is needed.
+
+Known query incompatibilities to check for:
+
+| Solr feature | Severity | OpenSearch situation |
+|---|---|---|
+| eDismax `pf`, `pf2`, `pf3` phrase boost fields | Behavioral | No direct equivalent; approximate with `multi_match` type `phrase` in a `should` clause. |
+| eDismax `bq` / `bf` additive boost | Behavioral | Use `function_score` or `script_score`; additive vs. multiplicative semantics differ. |
+| `{!join}` cross-collection join | Breaking | Not supported; restructure as nested documents or application-side join. |
+| `{!collapse}` field collapsing | Behavioral | Use `collapse` via the [Search API collapse parameter](https://opensearch.org/docs/latest/search-plugins/searching-data/collapse/) — available but syntax differs. |
+| Solr Streaming Expressions | Unsupported | No equivalent; move aggregation logic to the application layer or use OpenSearch aggregations. |
+| `{!graph}` graph traversal | Unsupported | No equivalent in OpenSearch. |
+| Spatial `{!geofilt}` / `{!bbox}` | Behavioral | Use `geo_distance` / `geo_bounding_box` queries; parameter names differ. |
+| `MoreLikeThis` handler | Behavioral | Use `more_like_this` query; `mindf`, `mintf` parameter names differ slightly. |
+| Facet pivots | Behavioral | Use nested `terms` aggregations; result shape differs. |
+| `cursorMark` deep pagination | Behavioral | Use `search_after` in OpenSearch; semantics are similar but not identical. |
+| Solr relevance TF-IDF (classic) | Behavioral | OpenSearch defaults to BM25; scores will differ. Configurable via `similarity` setting. |
 
 ### Step 4 — Solr Customizations
 
@@ -131,6 +159,7 @@ Identify which client calls need to change (endpoint URLs, request/response shap
 
 Call `generate_report` to produce the final report. The report must cover:
 
+- **Incompatibilities** (prominent, dedicated section at the top of the report) — every item collected in `facts.incompatibilities` across all steps, grouped by severity: Breaking → Behavioral → Unsupported. Each entry must include the category, a description, and the recommended resolution. If there are Breaking or Unsupported items, call them out explicitly as blockers that must be resolved before cutover.
 - Major milestones and suggested sequencing.
 - Blockers surfaced in Steps 2–6.
 - Implementation points with enough detail for an engineer to act on.
@@ -144,6 +173,8 @@ Present the report to the user and offer to drill into any section.
 - Follow the steps in order. If the user jumps ahead, acknowledge their input, store it in the session, and guide them back to complete any skipped steps.
 - If a user asks for migration advice but hasn't provided technical details, proactively request the Solr schema or a sample JSON document (Step 1).
 - Use the steering documents (Query Translation, Index Design, Sizing, Incompatibilities) to inform all reasoning.
+- **Incompatibility tracking is mandatory.** Every incompatibility found in any step must be recorded in `facts.incompatibilities` before moving on. Never silently skip a known issue.
+- When in doubt about whether something is an incompatibility, flag it conservatively — a false positive is far less harmful than a missed breaking change.
 
 ### Usage
 
