@@ -25,21 +25,36 @@ Each skill directory contains:
 
 ## Getting Started
 
+The `solr-to-opensearch` skill is available in Kiro and activates automatically when you mention relevant topics in chat.
+
+**1. Install dependencies**
+
 ```bash
-cd .junie/skills/solr-to-opensearch
-pip install -e ".[dev]"
-python - <<'EOF'
-import sys
-import os
-# Add scripts directory to sys.path
-sys.path.append(os.path.join(os.getcwd(), "scripts"))
-
-from skill import SolrToOpenSearchMigrationSkill
-
-skill = SolrToOpenSearchMigrationSkill()
-print(skill.convert_query("title:opensearch AND price:[10 TO 100]"))
-EOF
+pip install -e ".kiro/skills/solr-to-opensearch[mcp]"
 ```
+
+**2. Configure the MCP server**
+
+Add the following to `.kiro/settings/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "solr-to-opensearch": {
+      "command": "python3",
+      "args": [".kiro/skills/solr-to-opensearch/scripts/mcp_server.py"],
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+}
+```
+
+Restart or reconnect the MCP server from the Kiro MCP Server view after saving the config.
+
+**3. Start chatting**
+
+Open Kiro chat and use any of the example prompts above. The skill will guide you through a step-by-step migration workflow covering schema conversion, query translation, incompatibility analysis, cluster sizing, and a final migration report.
 
 ## Example Solr IMDB queries
 
