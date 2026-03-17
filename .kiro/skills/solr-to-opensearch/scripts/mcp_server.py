@@ -130,5 +130,72 @@ def get_field_type_mapping_reference() -> str:
     return _skill.get_field_type_mapping_reference()
 
 
+@mcp.tool()
+def create_opensearch_index(index_name: str, mapping_json: str) -> str:
+    """Create an OpenSearch index using the provided index name and mapping.
+
+    This step is OPTIONAL. Only call this tool if the user has explicitly agreed
+    to create the index in OpenSearch. Always ask for confirmation before calling.
+
+    Requires the opensearch-py MCP server (or equivalent) to be configured and
+    reachable. This tool delegates to the OpenSearch MCP server's index creation
+    capability by constructing the appropriate request body.
+
+    Args:
+        index_name: The name of the OpenSearch index to create.
+        mapping_json: A JSON string representing the OpenSearch index mapping
+                      (as produced by convert_schema_xml or convert_schema_json).
+
+    Returns:
+        A message indicating success or describing the error encountered.
+    """
+    import json
+    import urllib.request
+    import urllib.error
+
+    # Parse and validate the mapping JSON before attempting creation.
+    try:
+        mapping = json.loads(mapping_json)
+    except json.JSONDecodeError as exc:
+        return f"Invalid mapping JSON: {exc}"
+
+    # Build the index creation request body.
+    body = json.dumps(mapping).encode("utf-8")
+
+    # Default to localhost; users can override via OPENSEARCH_URL env var.
+    base_url = os.environ.get("OPENSEARCH_URL", "http://localhost:9200").rstrip("/")
+    url = f"{base_url}/{index_name}"
+
+    req = urllib.request.Request(
+        url,
+        data=body,
+        method="PUT",
+        headers={"Content-Type": "application/json"},
+    )
+
+    # Support basic auth via OPENSEARCH_USER / OPENSEARCH_PASSWORD env vars.
+    user = os.environ.get("OPENSEARCH_USER")
+    password = os.environ.get("OPENSEARCH_PASSWORD")
+    if user and password:
+        import base64
+        credentials = base64.b64encode(f"{user}:{password}".encode()).decode()
+        req.add_header("Authorization", f"Basic {credentials}")
+
+    try:
+        with urllib.request.urlopen(req) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+            if result.get("acknowledged"):
+                return f"Index '{index_name}' created successfully."
+            return f"Unexpected response: {result}"
+    except urllib.error.HTTPError as exc:
+        error_body = exc.read().decode("utf-8", errors="replace")
+        return f"HTTP {exc.code} error creating index '{index_name}': {error_body}"
+    except urllib.error.URLError as exc:
+        return (
+            f"Could not connect to OpenSearch at {base_url}: {exc.reason}. "
+            "Check that OpenSearch is running and OPENSEARCH_URL is set correctly."
+        )
+
+
 if __name__ == "__main__":
     mcp.run(transport="stdio")

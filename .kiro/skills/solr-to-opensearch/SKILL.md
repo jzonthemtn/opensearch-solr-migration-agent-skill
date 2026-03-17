@@ -49,7 +49,13 @@ Get the Solr schema that will be the basis for the OpenSearch index mapping. The
 - **Path A — Existing schema:** Ask the user to paste their `schema.xml` or the JSON response from the Solr Schema API (`GET /solr/<collection>/schema`). Call `convert_schema_xml` or `convert_schema_json` accordingly and show the resulting OpenSearch mapping.
 - **Path B — No schema yet:** If the user has no existing Solr schema, ask them to provide a sample JSON document that represents the data they plan to index. Infer field names and types from the JSON structure and generate a starter OpenSearch index mapping. Confirm the inferred types with the user before proceeding.
 
-Once a mapping is agreed upon, save it to the session and move to Step 2.
+Once a mapping is agreed upon, save it to the session.
+
+**Optional — Create the index in OpenSearch:** After presenting the mapping, ask the user:
+*"Would you like me to create this index in OpenSearch now?"*
+Only call `create_opensearch_index` if the user explicitly agrees. Pass the agreed-upon index name and the mapping JSON. If the user declines or does not respond affirmatively, skip this step and move on. Inform the user that `OPENSEARCH_URL`, `OPENSEARCH_USER`, and `OPENSEARCH_PASSWORD` environment variables can be set to point to their cluster (defaults to `http://localhost:9200`).
+
+Move to Step 2.
 
 ### Step 2 — Schema Review & Incompatibility Analysis
 
