@@ -2,19 +2,22 @@
 name: solr-to-opensearch
 displayName: "Solr to OpenSearch Migration Advisor"
 description: >
-  Migrate from Apache Solr to OpenSearch. A comprehensive migration advisor that
-  handles schema and query translation, sizing recommendations, and 
-  incompatibility detection. Includes a transport-agnostic agent core and
-  MCP server wrapper.
-  Trigger phrases: "migrate from Solr", "convert Solr schema", "translate Solr
-  query to OpenSearch", "Solr to OpenSearch migration", "migration advisor".
-license: Apache-2.0
-compatibility: "Python 3.11+"
+  Expert in migrating Apache Solr collections to OpenSearch indexes. 
+  Translates Solr XML/JSON schemas to OpenSearch mappings and converts 
+  Solr syntax (Standard, DisMax, eDisMax) into OpenSearch DSL. 
+  Provides sizing for nodes, shards, and JVM heap.
+keywords: 
+  - "Solr to OpenSearch"
+  - "migrate Solr"
+  - "schema.xml to mapping"
+  - "solrconfig.xml"
+  - "edismax to bool query"
+  - "synonyms.txt"
+  - "SolrCloud vs OpenSearch Cluster"
 metadata:
   author: jzonthemtn
   version: "0.2.0"
-keywords: [ "migration", "Solr", "OpenSearch", "schema", "query", "translation", "migration advisor" ]
-author: "jzonthemtn"
+  capability: "translation-engine"
 ---
 
 # Apache Solr to OpenSearch Migration Advisor
