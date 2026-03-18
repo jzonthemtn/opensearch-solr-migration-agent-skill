@@ -13,9 +13,9 @@ from Apache Solr to OpenSearch. Compatible with the
 
 ## Skills
 
-| Skill | Directory | Description |
-|---|---|---|
-| Solr to OpenSearch Migration | [`.kiro/skills/solr-to-opensearch/`](.kiro/skills/solr-to-opensearch/) | Converts Solr schemas and queries to OpenSearch equivalents and provides migration guidance |
+| Skill                        | Directory                                                                       | Description                                                                                 |
+|------------------------------|---------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------|
+| Solr to OpenSearch Migration | [`.kiro/skills/solr-to-opensearch/`](.kiro/skills/solr-to-opensearch/README.md) | Converts Solr schemas and queries to OpenSearch equivalents and provides migration guidance |
 
 Each skill directory contains:
 - `SKILL.md` — Machine-readable skill definition (agentskills.io format)
